@@ -142,8 +142,8 @@ border-radius:6px;
 <button class="smallBtn" onclick="addSite()">新增場域</button>
 <button class="smallBtn deleteBtn" onclick="deleteSite()">刪除場域</button>
 
-<label>車位號碼 (可多個或區間)</label>
-<input id="spot" placeholder="例: 1-5 或 1,2,3">
+<label>車位號碼</label>
+<input id="spot">
 
 <div class="row">
 
@@ -168,9 +168,6 @@ border-radius:6px;
 
 <div class="card">
 
-<label>搜尋場域</label>
-<input id="search" oninput="render()">
-
 <div class="row">
 <button onclick="changeDate(-1)">◀</button>
 <div id="dateText"></div>
@@ -191,7 +188,6 @@ border-radius:6px;
 <th>結果</th>
 <th>日期</th>
 <th>備註</th>
-<th>刪除</th>
 </tr>
 </thead>
 
@@ -205,126 +201,76 @@ border-radius:6px;
 
 <script>
 
-const API_URL="https://script.google.com/a/macros/uspace.city/s/AKfycbyk8ehoWckilpridvb820zkFEteIoOfh4Ridz2DBp5IkWMzEwliL_iT2B_rsQgDK6i_uQ/exec";
+const API="https://script.google.com/a/macros/uspace.city/s/AKfycbyk8ehoWckilpridvb820zkFEteIoOfh4Ridz2DBp5IkWMzEwliL_iT2B_rsQgDK6i_uQ/exec";
 
-let sites = JSON.parse(localStorage.getItem("sites") || '["光復大廈"]');
-let records = JSON.parse(localStorage.getItem("records") || "[]");
+let sites=["光復大廈"];
+let records=[];
 
-let currentDate = new Date().toISOString().split("T")[0];
+let currentDate=new Date().toISOString().split("T")[0];
 
-function save(){
-localStorage.setItem("records",JSON.stringify(records));
-localStorage.setItem("sites",JSON.stringify(sites));
-}
+function loadData(){
 
-function updateSiteList(){
-
-let s=document.getElementById("siteSelect");
-
-s.innerHTML="";
-
-sites.forEach(v=>{
-let op=document.createElement("option");
-op.text=v;
-s.appendChild(op);
+fetch(API)
+.then(r=>r.json())
+.then(data=>{
+records=data;
+render();
 });
-
-}
-
-function addSite(){
-
-let name=document.getElementById("newSite").value.trim();
-
-if(!name)return;
-
-sites.push(name);
-
-save();
-
-updateSiteList();
-
-document.getElementById("newSite").value="";
-
-}
-
-function deleteSite(){
-
-let s=document.getElementById("siteSelect").value;
-
-sites=sites.filter(a=>a!=s);
-
-save();
-
-updateSiteList();
-
-}
-
-function expandSpots(text){
-
-let arr=[];
-
-text.split(",").forEach(p=>{
-
-if(p.includes("-")){
-
-let [a,b]=p.split("-").map(Number);
-
-for(let i=a;i<=b;i++)arr.push(i);
-
-}else{
-
-arr.push(p);
-
-}
-
-});
-
-return arr.join(",");
 
 }
 
 function addRecord(){
 
 let site=document.getElementById("siteSelect").value;
-let spot=expandSpots(document.getElementById("spot").value);
+let spot=document.getElementById("spot").value;
 let result=document.getElementById("result").value;
 let note=document.getElementById("note").value;
 
-let data={
-date:currentDate,
-site:site,
-spot:spot,
-result:result,
-note:note
-};
-
-/* 本機儲存 */
-records.push(data);
-save();
-render();
-
-/* 雲端同步 */
-fetch(API_URL,{
+fetch(API,{
 method:"POST",
-body:JSON.stringify(data)
+body:JSON.stringify({
+date:currentDate,
+site,
+spot,
+result,
+note
 })
-.then(res=>res.text())
-.then(msg=>{
-console.log("同步成功",msg);
 })
-.catch(err=>{
-console.log("同步失敗",err);
-});
+.then(()=>loadData());
 
 }
 
-function deleteRecord(i){
+function render(){
 
-records.splice(i,1);
+document.getElementById("dateText").innerText=currentDate;
 
-save();
+let html="";
+let success=0;
+let fail=0;
 
-render();
+records.forEach(r=>{
+
+if(r.date!=currentDate)return;
+
+if(r.result=="換電") success++;
+else fail++;
+
+html+=`
+<tr>
+<td>${r.site}</td>
+<td>${r.spot}</td>
+<td>${r.result}</td>
+<td>${r.date}</td>
+<td>${r.note||""}</td>
+</tr>
+`;
+
+});
+
+document.getElementById("recordTable").innerHTML=html;
+
+document.getElementById("successCount").innerText="換電 : "+success;
+document.getElementById("failCount").innerText="有車 : "+fail;
 
 }
 
@@ -340,53 +286,7 @@ render();
 
 }
 
-function render(){
-
-document.getElementById("dateText").innerText=currentDate;
-
-let search=document.getElementById("search").value;
-
-let html="";
-
-let success=0;
-let fail=0;
-
-records.forEach((r,i)=>{
-
-if(r.date!=currentDate)return;
-
-if(search && !r.site.includes(search))return;
-
-if(r.result=="換電") success++;
-else fail++;
-
-html+=`
-<tr>
-
-<td>${r.site}</td>
-<td>${r.spot}</td>
-<td class="${r.result=='換電'?'result-success':'result-fail'}">${r.result}</td>
-<td>${r.date}</td>
-<td>${r.note||""}</td>
-
-<td>
-<button class="deleteBtn" onclick="deleteRecord(${i})">刪除</button>
-</td>
-
-</tr>
-`;
-
-});
-
-document.getElementById("recordTable").innerHTML=html;
-
-document.getElementById("successCount").innerText="換電 : "+success;
-document.getElementById("failCount").innerText="有車 : "+fail;
-
-}
-
-updateSiteList();
-render();
+loadData();
 
 </script>
 
